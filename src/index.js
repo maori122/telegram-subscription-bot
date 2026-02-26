@@ -527,10 +527,12 @@ async function approveScreenshot(chatId, messageId, targetUserId, env) {
     console.error('Error sending to user:', e);
   }
 
-  // Обновляем сообщение админа
-  await editMessageCaption(chatId, messageId,
-    `✅ ОДОБРЕНО\n\n` +
-    `Пользователь: ${user.firstName} (@${user.username})\n` +
+  // Удаляем сообщение со скриншотом
+  await deleteMessage(chatId, messageId, env);
+  
+  // Отправляем уведомление админу
+  await sendMessage(chatId,
+    `✅ Одобрено: ${user.firstName} (@${user.username})\n` +
     `Новое количество подписок: ${user.subscriptions}`,
     null,
     env
@@ -567,10 +569,12 @@ async function rejectScreenshot(chatId, messageId, targetUserId, env) {
     console.error('Error sending to user:', e);
   }
 
-  // Обновляем сообщение админа
-  await editMessageCaption(chatId, messageId,
-    `❌ ОТКЛОНЕНО\n\n` +
-    `Пользователь: ${user.firstName} (@${user.username})\n` +
+  // Удаляем сообщение со скриншотом
+  await deleteMessage(chatId, messageId, env);
+  
+  // Отправляем уведомление админу
+  await sendMessage(chatId,
+    `❌ Отклонено: ${user.firstName} (@${user.username})\n` +
     `Количество подписок: ${user.subscriptions || 0} (не изменилось)`,
     null,
     env
@@ -745,11 +749,16 @@ async function handleSetPrice(chatId, targetUserId, text, env) {
   users[targetUserId] = user;
   await saveUsers(users, env);
 
+  // Показываем обновленную панель управления пользователем
   await sendMessage(chatId,
-    `✅ Цена за подписку для ${user.firstName} (@${user.username}) установлена: ${price}р`,
-    getAdminKeyboard(),
+    `✅ Цена установлена: ${price}р`,
+    null,
     env
   );
+  
+  // Возвращаемся к управлению пользователем
+  const messageId = (await sendMessage(chatId, 'Загрузка...', null, env)).result.message_id;
+  await showUserManagement(chatId, messageId, targetUserId, env);
 }
 
 // Клавиатуры
