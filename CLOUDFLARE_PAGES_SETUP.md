@@ -28,7 +28,7 @@ Type: Secret (выберите из выпадающего списка)
 
 ```
 Variable name: ADMIN_PASSWORD
-Value: ny9FL5JXopQhRDq2EY4bxXMiHO4/SQCM
+Value: ваш_надежный_пароль
 Type: Secret (выберите из выпадающего списка)
 ```
 
@@ -70,7 +70,7 @@ https://api.telegram.org/bot7234567890:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw/setWeb
 1. Откройте бота в Telegram
 2. Отправьте: `/start`
 3. Нажмите кнопку: **✅ Зарегистрироваться**
-4. Авторизуйтесь: `/admin ny9FL5JXopQhRDq2EY4bxXMiHO4/SQCM`
+4. Авторизуйтесь: `/admin ВАШ_ПАРОЛЬ`
 5. Должны появиться кнопки управления!
 
 ---
@@ -116,7 +116,7 @@ wrangler secret put BOT_TOKEN
 ```bash
 wrangler secret put ADMIN_PASSWORD
 ```
-Введите: `ny9FL5JXopQhRDq2EY4bxXMiHO4/SQCM`
+Введите ваш надежный пароль
 
 6. Деплой:
 ```bash
