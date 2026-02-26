@@ -314,17 +314,24 @@ async function handleCallback(callbackQuery, env) {
 
   // Одобрение скриншота
   if (data.startsWith('approve_')) {
-    const targetUserId = data.substring(8);
-    await approveScreenshot(chatId, messageId, targetUserId, env);
+    const screenshotId = data.substring(8);
+    await approveScreenshot(chatId, messageId, screenshotId, env);
     await answerCallback(callbackQuery.id, '✅ Одобрено!', env);
     return;
   }
 
   // Отклонение скриншота
   if (data.startsWith('reject_')) {
-    const targetUserId = data.substring(7);
-    await rejectScreenshot(chatId, messageId, targetUserId, env);
+    const screenshotId = data.substring(7);
+    await rejectScreenshot(chatId, messageId, screenshotId, env);
     await answerCallback(callbackQuery.id, '❌ Отклонено', env);
+    return;
+  }
+
+  // Список ожидающих скриншотов
+  if (data === 'admin_pending_screenshots') {
+    await showPendingScreenshots(chatId, messageId, env);
+    await answerCallback(callbackQuery.id, '', env);
     return;
   }
 
@@ -391,12 +398,26 @@ async function handleScreenshot(chatId, userId, photos, originalMessage, env) {
     env
   );
 
+  // Создаем запись о скриншоте
+  const screenshotId = `screenshot_${userId}_${Date.now()}`;
+  const screenshotData = {
+    userId: userId,
+    userName: user.firstName,
+    userUsername: user.username,
+    channelLink: channelLink,
+    fileId: fileId,
+    status: 'pending', // pending, approved, rejected
+    timestamp: Date.now()
+  };
+  
+  await env.USERS.put(screenshotId, JSON.stringify(screenshotData));
+
   // Отправляем скриншот всем админам с кнопками модерации
   const admins = await getAdmins(env);
   for (const adminId of Object.keys(admins)) {
     try {
       // Отправляем фото админу
-      await sendPhoto(adminId, fileId, 
+      const result = await sendPhoto(adminId, fileId, 
         `📸 Новый скриншот от ${user.firstName} (@${user.username})\n\n` +
         `📊 Текущее количество подписок: ${user.subscriptions || 0}\n` +
         `🔗 Канал: ${channelLink}\n\n` +
@@ -404,13 +425,20 @@ async function handleScreenshot(chatId, userId, photos, originalMessage, env) {
         {
           inline_keyboard: [
             [
-              { text: '✅ Одобрить (+1)', callback_data: `approve_${userId}` },
-              { text: '❌ Отклонить', callback_data: `reject_${userId}` }
+              { text: '✅ Одобрить (+1)', callback_data: `approve_${screenshotId}` },
+              { text: '❌ Отклонить', callback_data: `reject_${screenshotId}` }
             ]
           ]
         },
         env
       );
+      
+      // Сохраняем ID сообщения для возможности удаления
+      if (result && result.result) {
+        screenshotData.adminMessageId = result.result.message_id;
+        screenshotData.adminChatId = adminId;
+        await env.USERS.put(screenshotId, JSON.stringify(screenshotData));
+      }
     } catch (e) {
       console.error('Error sending to admin:', e);
     }
@@ -529,16 +557,22 @@ async function handleSendMessageToUser(chatId, targetUserId, text, env) {
 }
 
 // Одобрение скриншота
-async function approveScreenshot(chatId, messageId, targetUserId, env) {
+async function approveScreenshot(chatId, messageId, screenshotId, env) {
+  // Получаем данные скриншота
+  const screenshotDataStr = await env.USERS.get(screenshotId);
+  if (!screenshotDataStr) {
+    await editMessageCaption(chatId, messageId, '❌ Скриншот не найден.', null, env);
+    return;
+  }
+  
+  const screenshotData = JSON.parse(screenshotDataStr);
+  const targetUserId = screenshotData.userId;
+  
   const users = await getUsers(env);
   const user = users[targetUserId];
   
   if (!user) {
-    await editMessageCaption(chatId, messageId,
-      '❌ Пользователь не найден.',
-      null,
-      env
-    );
+    await editMessageCaption(chatId, messageId, '❌ Пользователь не найден.', null, env);
     return;
   }
 
@@ -546,6 +580,11 @@ async function approveScreenshot(chatId, messageId, targetUserId, env) {
   user.subscriptions = (user.subscriptions || 0) + 1;
   users[targetUserId] = user;
   await saveUsers(users, env);
+
+  // Обновляем статус скриншота
+  screenshotData.status = 'approved';
+  screenshotData.approvedAt = Date.now();
+  await env.USERS.put(screenshotId, JSON.stringify(screenshotData));
 
   // Получаем текст ответа
   const responseTemplate = await getResponseTemplate(env);
@@ -571,18 +610,29 @@ async function approveScreenshot(chatId, messageId, targetUserId, env) {
 }
 
 // Отклонение скриншота
-async function rejectScreenshot(chatId, messageId, targetUserId, env) {
+async function rejectScreenshot(chatId, messageId, screenshotId, env) {
+  // Получаем данные скриншота
+  const screenshotDataStr = await env.USERS.get(screenshotId);
+  if (!screenshotDataStr) {
+    await editMessageCaption(chatId, messageId, '❌ Скриншот не найден.', null, env);
+    return;
+  }
+  
+  const screenshotData = JSON.parse(screenshotDataStr);
+  const targetUserId = screenshotData.userId;
+  
   const users = await getUsers(env);
   const user = users[targetUserId];
   
   if (!user) {
-    await editMessageCaption(chatId, messageId,
-      '❌ Пользователь не найден.',
-      null,
-      env
-    );
+    await editMessageCaption(chatId, messageId, '❌ Пользователь не найден.', null, env);
     return;
   }
+
+  // Обновляем статус скриншота
+  screenshotData.status = 'rejected';
+  screenshotData.rejectedAt = Date.now();
+  await env.USERS.put(screenshotId, JSON.stringify(screenshotData));
 
   // Отправляем уведомление пользователю
   try {
@@ -608,6 +658,50 @@ async function rejectScreenshot(chatId, messageId, targetUserId, env) {
     `❌ Отклонено: ${user.firstName} (@${user.username})\n` +
     `Количество подписок: ${user.subscriptions || 0} (не изменилось)`,
     null,
+    env
+  );
+}
+
+// Показать список ожидающих скриншотов
+async function showPendingScreenshots(chatId, messageId, env) {
+  // Получаем все ключи из KV
+  const list = await env.USERS.list({ prefix: 'screenshot_' });
+  
+  const pending = [];
+  const approved = [];
+  const rejected = [];
+  
+  for (const key of list.keys) {
+    const dataStr = await env.USERS.get(key.name);
+    if (dataStr) {
+      const data = JSON.parse(dataStr);
+      if (data.status === 'pending') {
+        pending.push(data);
+      } else if (data.status === 'approved') {
+        approved.push(data);
+      } else if (data.status === 'rejected') {
+        rejected.push(data);
+      }
+    }
+  }
+  
+  let text = '📸 Статус скриншотов:\n\n';
+  
+  text += `⏳ Ожидают проверки: ${pending.length}\n`;
+  if (pending.length > 0) {
+    pending.slice(0, 5).forEach(s => {
+      text += `  • ${s.userName} (@${s.userUsername})\n`;
+    });
+    if (pending.length > 5) {
+      text += `  ... и еще ${pending.length - 5}\n`;
+    }
+  }
+  
+  text += `\n✅ Одобрено сегодня: ${approved.length}\n`;
+  text += `❌ Отклонено сегодня: ${rejected.length}\n`;
+  
+  await editMessage(chatId, messageId, text, 
+    { inline_keyboard: [[{ text: '🔙 Назад', callback_data: 'back' }]] },
     env
   );
 }
@@ -821,7 +915,10 @@ function getAdminKeyboard() {
         { text: '👥 Список пользователей', callback_data: 'admin_users' }
       ],
       [
-        { text: '📢 Общая рассылка (новости)', callback_data: 'admin_broadcast' }
+        { text: '� Скриншоты на проверке', callback_data: 'admin_pending_screenshots' }
+      ],
+      [
+        { text: '�📢 Общая рассылка (новости)', callback_data: 'admin_broadcast' }
       ]
     ]
   };
