@@ -1,6 +1,7 @@
+node_modules/
+.wrangler/
 .env
-users.json
-admins.json
-__pycache__/
-*.pyc
+.dev.vars
+dist/
+*.log
 .DS_Store

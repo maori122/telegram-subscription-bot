@@ -1,0 +1,16 @@
+{
+  "name": "telegram-bot-cloudflare",
+  "version": "1.0.0",
+  "description": "Telegram bot для рассылки на Cloudflare Workers",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "keywords": ["telegram", "bot", "cloudflare", "workers"],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+}
