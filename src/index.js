@@ -28,6 +28,17 @@ async function handleMessage(message, env) {
 
   // Команда /start
   if (message.text === '/start') {
+    // Проверяем, может это админ
+    const isAdmin = await checkAdmin(userId, env);
+    if (isAdmin) {
+      await sendMessage(chatId, 
+        '🤖 Панель администратора',
+        getAdminKeyboard(),
+        env
+      );
+      return;
+    }
+
     const keyboard = {
       inline_keyboard: [[
         { text: '✅ Зарегистрироваться', callback_data: 'register' }
@@ -67,6 +78,36 @@ async function handleMessage(message, env) {
 
   // Проверяем, зарегистрирован ли пользователь
   const users = await getUsers(env);
+  
+  // Админские команды через текст
+  const isAdmin = await checkAdmin(userId, env);
+  if (isAdmin) {
+    const state = await getUserState(userId, env);
+    
+    if (state === 'waiting_link') {
+      await clearUserState(userId, env);
+      await handleSendLink(chatId, message.text, env);
+    } else if (state === 'waiting_broadcast') {
+      await clearUserState(userId, env);
+      await handleBroadcast(chatId, message.text, env);
+    } else if (state === 'waiting_response') {
+      await clearUserState(userId, env);
+      await handleSetResponse(chatId, message.text, env);
+    } else if (state && state.startsWith('waiting_message_')) {
+      const targetUserId = state.substring(16);
+      await clearUserState(userId, env);
+      await handleSendMessageToUser(chatId, targetUserId, message.text, env);
+    } else {
+      await sendMessage(chatId, 
+        'Используйте кнопки для управления ботом.',
+        getAdminKeyboard(),
+        env
+      );
+    }
+    return;
+  }
+  
+  // Обычные пользователи должны быть зарегистрированы
   if (!users[userId]) {
     await sendMessage(chatId, 
       'Сначала зарегистрируйтесь, нажав /start',
@@ -82,35 +123,11 @@ async function handleMessage(message, env) {
     return;
   }
 
-  // Админские команды через текст
-  const isAdmin = await checkAdmin(userId, env);
-  if (isAdmin) {
-    const state = await getUserState(userId, env);
-    
-    if (state === 'waiting_link') {
-      await clearUserState(userId, env);
-      await handleSendLink(chatId, message.text, env);
-    } else if (state === 'waiting_response') {
-      await clearUserState(userId, env);
-      await handleSetResponse(chatId, message.text, env);
-    } else if (state && state.startsWith('waiting_message_')) {
-      const targetUserId = state.substring(16);
-      await clearUserState(userId, env);
-      await handleSendMessageToUser(chatId, targetUserId, message.text, env);
-    } else {
-      await sendMessage(chatId, 
-        'Используйте кнопки для управления ботом.',
-        getAdminKeyboard(),
-        env
-      );
-    }
-  } else {
-    await sendMessage(chatId, 
-      'Отправьте скриншот подписки, чтобы получить подтверждение.',
-      null,
-      env
-    );
-  }
+  await sendMessage(chatId, 
+    'Отправьте скриншот подписки, чтобы получить подтверждение.',
+    null,
+    env
+  );
 }
 
 // Обработка нажатий на кнопки
@@ -180,6 +197,18 @@ async function handleCallback(callbackQuery, env) {
     return;
   }
 
+  if (data === 'admin_broadcast') {
+    await setUserState(userId, 'waiting_broadcast', env);
+    await editMessage(chatId, messageId,
+      '📢 Напишите текст новости для рассылки всем пользователям:\n\n' +
+      'Это сообщение получат все зарегистрированные пользователи.',
+      getCancelKeyboard(),
+      env
+    );
+    await answerCallback(callbackQuery.id, '', env);
+    return;
+  }
+
   if (data === 'admin_set_response') {
     await setUserState(userId, 'waiting_response', env);
     await editMessage(chatId, messageId,
@@ -206,6 +235,14 @@ async function handleCallback(callbackQuery, env) {
     await modifySubscriptions(targetUserId, 1, env);
     await showUserManagement(chatId, messageId, targetUserId, env);
     await answerCallback(callbackQuery.id, '✅ +1 подписка', env);
+    return;
+  }
+
+  if (data.startsWith('sub_add10_')) {
+    const targetUserId = data.substring(10);
+    await modifySubscriptions(targetUserId, 10, env);
+    await showUserManagement(chatId, messageId, targetUserId, env);
+    await answerCallback(callbackQuery.id, '✅ +10 подписок', env);
     return;
   }
 
@@ -357,6 +394,36 @@ async function handleSendLink(chatId, link, env) {
 
   await sendMessage(chatId,
     `✅ Ссылка разослана!\n\n` +
+    `Успешно: ${success}\n` +
+    `Ошибок: ${failed}`,
+    getAdminKeyboard(),
+    env
+  );
+}
+
+// Общая рассылка (новости)
+async function handleBroadcast(chatId, text, env) {
+  const users = await getUsers(env);
+  const userIds = Object.keys(users);
+  
+  let success = 0;
+  let failed = 0;
+
+  for (const userId of userIds) {
+    try {
+      await sendMessage(userId,
+        `📢 Новость от администратора:\n\n${text}`,
+        null,
+        env
+      );
+      success++;
+    } catch (error) {
+      failed++;
+    }
+  }
+
+  await sendMessage(chatId,
+    `✅ Новость разослана!\n\n` +
     `Успешно: ${success}\n` +
     `Ошибок: ${failed}`,
     getAdminKeyboard(),
@@ -542,6 +609,7 @@ async function showUserManagement(chatId, messageId, targetUserId, env) {
         { text: '➖ -1 подписка', callback_data: `sub_remove_${targetUserId}` }
       ],
       [
+        { text: '➕ +10 подписок', callback_data: `sub_add10_${targetUserId}` },
         { text: '🔄 Обнулить', callback_data: `sub_reset_${targetUserId}` }
       ],
       [
@@ -597,7 +665,7 @@ function getAdminKeyboard() {
         { text: '🔗 Разослать ссылку', callback_data: 'admin_send_link' }
       ],
       [
-        { text: '💬 Настроить ответ', callback_data: 'admin_set_response' }
+        { text: '📢 Общая рассылка (новости)', callback_data: 'admin_broadcast' }
       ]
     ]
   };
