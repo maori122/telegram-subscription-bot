@@ -92,7 +92,7 @@ curl "https://api.telegram.org/botTOKEN/setWebhook?url=WORKER_URL"
 
 ### Администратор:
 
-1. Авторизация: `/admin Yp~?L*W<a"v/(~mFm&[&`
+1. Авторизация: `/admin ВАШ_ПАРОЛЬ` (установите свой пароль в Cloudflare Secrets)
 2. Появится панель с кнопками:
 
 ```
@@ -165,7 +165,7 @@ curl "https://api.telegram.org/botTOKEN/setWebhook?url=WORKER_URL"
 | `/start` | Начало работы и регистрация |
 | `/admin <пароль>` | Авторизация администратора |
 
-**Пароль по умолчанию:** `Yp~?L*W<a"v/(~mFm&[&`
+**Важно:** Установите свой собственный пароль через `wrangler secret put ADMIN_PASSWORD`
 
 ## 📁 Структура проекта
 

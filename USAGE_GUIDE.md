@@ -58,8 +58,10 @@ https://t.me/example_channel
 
 Отправьте:
 ```
-/admin Yp~?L*W<a"v/(~mFm&[&
+/admin ВАШ_ПАРОЛЬ
 ```
+
+(Установите свой пароль через `wrangler secret put ADMIN_PASSWORD`)
 
 Сообщение автоматически удалится, и вы увидите:
 ```

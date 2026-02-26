@@ -24,8 +24,8 @@
    - Build Command: `pip install -r requirements.txt`
    - Start Command: `python bot.py`
 5. Добавьте Environment Variables:
-   - `BOT_TOKEN` = ваш токен
-   - `ADMIN_PASSWORD_HASH` = $2b$12$VXMamfd.bj8OUIPzj65ZV.kJMs/r.VDcqOG08GNjk8AafXOVGkepS
+   - `BOT_TOKEN` = ваш токен от @BotFather
+   - `ADMIN_PASSWORD` = ваш собственный надежный пароль
 6. Нажмите "Create Background Worker"
 
 ## Вариант 3: Fly.io (бесплатно)
@@ -36,7 +36,7 @@
 ```bash
 fly launch
 fly secrets set BOT_TOKEN="ваш_токен"
-fly secrets set ADMIN_PASSWORD_HASH='$2b$12$VXMamfd.bj8OUIPzj65ZV.kJMs/r.VDcqOG08GNjk8AafXOVGkepS'
+fly secrets set ADMIN_PASSWORD="ваш_надежный_пароль"
 fly deploy
 ```
 
@@ -65,5 +65,5 @@ nohup python bot.py &
 После деплоя:
 1. Найдите бота в Telegram
 2. Отправьте `/start`
-3. Авторизуйтесь как админ: `/admin Yp~?L*W<a"v/(~mFm&[&`
-4. Проверьте команды: `/users`, `/broadcast`, `/send`
+3. Авторизуйтесь как админ: `/admin ВАШ_ПАРОЛЬ`
+4. Проверьте функции через кнопки

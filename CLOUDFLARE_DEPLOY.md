@@ -40,7 +40,7 @@ wrangler secret put BOT_TOKEN
 ```bash
 wrangler secret put ADMIN_PASSWORD
 ```
-Введите: `Yp~?L*W<a"v/(~mFm&[&`
+Введите свой собственный надежный пароль (минимум 16 символов)
 
 ## Шаг 4: Деплой
 
@@ -126,7 +126,7 @@ https://dash.cloudflare.com → Workers & Pages → ваш worker
 
 ## ⚠️ Важно
 
-- Пароль админа: `Yp~?L*W<a"v/(~mFm&[&`
+- Пароль админа: установите свой собственный через `wrangler secret put ADMIN_PASSWORD`
 - Данные хранятся в Cloudflare KV (постоянно)
 - Бесплатный лимит KV: 100,000 операций чтения/день, 1,000 записей/день
 - Для большой нагрузки используйте платный план

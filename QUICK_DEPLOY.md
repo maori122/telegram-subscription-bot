@@ -27,7 +27,7 @@ git push -u origin main
 
 ```
 BOT_TOKEN = ваш_токен_от_BotFather
-ADMIN_PASSWORD_HASH = $2b$12$VXMamfd.bj8OUIPzj65ZV.kJMs/r.VDcqOG08GNjk8AafXOVGkepS
+ADMIN_PASSWORD = ваш_надежный_пароль
 ```
 
 3. Railway автоматически перезапустит бота
@@ -36,8 +36,8 @@ ADMIN_PASSWORD_HASH = $2b$12$VXMamfd.bj8OUIPzj65ZV.kJMs/r.VDcqOG08GNjk8AafXOVGke
 
 1. Откройте бота в Telegram
 2. Отправьте `/start`
-3. Авторизуйтесь: `/admin Yp~?L*W<a"v/(~mFm&[&`
-4. Проверьте команды!
+3. Авторизуйтесь: `/admin ВАШ_ПАРОЛЬ`
+4. Проверьте функции!
 
 ## ✅ Готово!
 

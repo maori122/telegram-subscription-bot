@@ -81,8 +81,9 @@ git push
 
 ## Пароль админа
 
-```
-Yp~?L*W<a"v/(~mFm&[&
+Установите свой собственный через:
+```bash
+wrangler secret put ADMIN_PASSWORD
 ```
 
 ## Структура кнопок
