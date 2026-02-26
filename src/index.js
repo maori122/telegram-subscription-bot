@@ -277,8 +277,12 @@ async function handleCallback(callbackQuery, env) {
     const users = await getUsers(env);
     const user = users[targetUserId];
     await editMessage(chatId, messageId,
-      `✉️ Отправьте сообщение для ${user.firstName} (@${user.username}):\n\n` +
-      'Напишите текст, который хотите отправить этому пользователю.',
+      `✉️ Отправьте ссылки для ${user.firstName} (@${user.username}):\n\n` +
+      `Каждую ссылку с новой строки:\n` +
+      `https://t.me/channel1\n` +
+      `https://t.me/channel2\n` +
+      `https://t.me/channel3\n\n` +
+      `Пользователь получит их отдельными сообщениями.`,
       getCancelKeyboard(),
       env
     );
@@ -535,25 +539,37 @@ async function handleSendMessageToUser(chatId, targetUserId, text, env) {
     return;
   }
 
-  try {
-    await sendMessage(targetUserId,
-      `📩 Сообщение от администратора:\n\n${text}`,
-      null,
-      env
-    );
-    
-    await sendMessage(chatId,
-      `✅ Сообщение отправлено пользователю ${user.firstName} (@${user.username})`,
-      getAdminKeyboard(),
-      env
-    );
-  } catch (error) {
-    await sendMessage(chatId,
-      `❌ Не удалось отправить сообщение пользователю ${user.firstName} (@${user.username})`,
-      getAdminKeyboard(),
-      env
-    );
+  // Разбиваем текст на строки (каждая строка = отдельная ссылка)
+  const lines = text.split('\n').filter(line => line.trim().length > 0);
+  
+  let successCount = 0;
+  let failCount = 0;
+
+  for (const line of lines) {
+    try {
+      await sendMessage(targetUserId,
+        `🔗 Новая ссылка на канал:\n\n${line}\n\n` +
+        `📸 Подпишитесь на канал и отправьте скриншот подписки ОТВЕТОМ на это сообщение.\n\n` +
+        `⚠️ Если вы уже подписаны, отправлять скриншот не нужно.`,
+        null,
+        env
+      );
+      successCount++;
+      
+      // Небольшая задержка между сообщениями
+      await new Promise(resolve => setTimeout(resolve, 100));
+    } catch (error) {
+      failCount++;
+    }
   }
+
+  await sendMessage(chatId,
+    `✅ Ссылки отправлены пользователю ${user.firstName} (@${user.username})\n\n` +
+    `Успешно: ${successCount}\n` +
+    `Ошибок: ${failCount}`,
+    getAdminKeyboard(),
+    env
+  );
 }
 
 // Одобрение скриншота
@@ -918,7 +934,7 @@ function getAdminKeyboard() {
         { text: '� Скриншоты на проверке', callback_data: 'admin_pending_screenshots' }
       ],
       [
-        { text: '�📢 Общая рассылка (новости)', callback_data: 'admin_broadcast' }
+        { text: '�� Общая рассылка (новости)', callback_data: 'admin_broadcast' }
       ]
     ]
   };
