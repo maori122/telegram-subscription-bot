@@ -94,6 +94,10 @@ async function handleMessage(message, env) {
       const targetUserId = state.substring(16);
       await clearUserState(userId, env);
       await handleSendMessageToUser(chatId, targetUserId, message.text, env);
+    } else if (state && state.startsWith('waiting_price_')) {
+      const targetUserId = state.substring(14);
+      await clearUserState(userId, env);
+      await handleSetPrice(chatId, targetUserId, message.text, env);
     } else {
       await sendMessage(chatId, 
         'Используйте кнопки для управления ботом.',
@@ -268,6 +272,24 @@ async function handleCallback(callbackQuery, env) {
     const targetUserId = data.substring(12);
     await deleteUser(chatId, messageId, targetUserId, env);
     await answerCallback(callbackQuery.id, '🗑️ Пользователь удален', env);
+    return;
+  }
+
+  // Установка цены за подписку
+  if (data.startsWith('set_price_')) {
+    const targetUserId = data.substring(10);
+    await setUserState(userId, `waiting_price_${targetUserId}`, env);
+    const users = await getUsers(env);
+    const user = users[targetUserId];
+    const currentPrice = user.pricePerSub || 'не настроено';
+    await editMessage(chatId, messageId,
+      `💰 Назначьте цену за подписку для ${user.firstName} (@${user.username}):\n\n` +
+      `Текущая цена: ${currentPrice}\n\n` +
+      'Отправьте число (например: 15 или 20.5)',
+      getCancelKeyboard(),
+      env
+    );
+    await answerCallback(callbackQuery.id, '', env);
     return;
   }
 
@@ -602,6 +624,9 @@ async function showUserManagement(chatId, messageId, targetUserId, env) {
     return;
   }
 
+  const pricePerSub = user.pricePerSub || 'не настроено';
+  const priceDisplay = typeof user.pricePerSub === 'number' ? `${user.pricePerSub}р` : pricePerSub;
+
   const keyboard = {
     inline_keyboard: [
       [
@@ -616,6 +641,9 @@ async function showUserManagement(chatId, messageId, targetUserId, env) {
         { text: '✉️ Отправить сообщение', callback_data: `send_msg_${targetUserId}` }
       ],
       [
+        { text: `💰 ПДП (${priceDisplay})`, callback_data: `set_price_${targetUserId}` }
+      ],
+      [
         { text: '🗑️ Удалить пользователя', callback_data: `delete_user_${targetUserId}` }
       ],
       [
@@ -627,6 +655,7 @@ async function showUserManagement(chatId, messageId, targetUserId, env) {
   await editMessage(chatId, messageId,
     `👤 ${user.firstName} (@${user.username})\n\n` +
     `📊 Подписок: ${user.subscriptions || 0}\n` +
+    `💰 ПДП: ${priceDisplay}\n` +
     `📅 Регистрация: ${new Date(user.registeredAt).toLocaleDateString('ru-RU')}`,
     keyboard,
     env
@@ -681,6 +710,44 @@ async function deleteUser(chatId, messageId, targetUserId, env) {
   await editMessage(chatId, messageId,
     `🗑️ Пользователь ${userName} удален из базы данных.`,
     { inline_keyboard: [[{ text: '🔙 К списку', callback_data: 'back_users' }]] },
+    env
+  );
+}
+
+// Установить цену за подписку
+async function handleSetPrice(chatId, targetUserId, text, env) {
+  const users = await getUsers(env);
+  const user = users[targetUserId];
+  
+  if (!user) {
+    await sendMessage(chatId,
+      '❌ Пользователь не найден.',
+      getAdminKeyboard(),
+      env
+    );
+    return;
+  }
+
+  // Парсим цену
+  const price = parseFloat(text.replace(',', '.'));
+  
+  if (isNaN(price) || price < 0) {
+    await sendMessage(chatId,
+      '❌ Неверный формат цены. Отправьте число (например: 15 или 20.5)',
+      getAdminKeyboard(),
+      env
+    );
+    return;
+  }
+
+  // Сохраняем цену
+  user.pricePerSub = price;
+  users[targetUserId] = user;
+  await saveUsers(users, env);
+
+  await sendMessage(chatId,
+    `✅ Цена за подписку для ${user.firstName} (@${user.username}) установлена: ${price}р`,
+    getAdminKeyboard(),
     env
   );
 }
