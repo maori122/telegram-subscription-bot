@@ -93,6 +93,10 @@ async function handleMessage(message, env) {
     } else if (state === 'waiting_response') {
       await clearUserState(userId, env);
       await handleSetResponse(chatId, message.text, env);
+    } else if (state && state.startsWith('waiting_message_')) {
+      const targetUserId = state.substring(16);
+      await clearUserState(userId, env);
+      await handleSendMessageToUser(chatId, targetUserId, message.text, env);
     } else {
       await sendMessage(chatId, 
         'Используйте кнопки для управления ботом.',
@@ -221,6 +225,21 @@ async function handleCallback(callbackQuery, env) {
     return;
   }
 
+  if (data.startsWith('send_msg_')) {
+    const targetUserId = data.substring(9);
+    await setUserState(userId, `waiting_message_${targetUserId}`, env);
+    const users = await getUsers(env);
+    const user = users[targetUserId];
+    await editMessage(chatId, messageId,
+      `✉️ Отправьте сообщение для ${user.firstName} (@${user.username}):\n\n` +
+      'Напишите текст, который хотите отправить этому пользователю.',
+      getCancelKeyboard(),
+      env
+    );
+    await answerCallback(callbackQuery.id, '', env);
+    return;
+  }
+
   if (data === 'back') {
     await clearUserState(userId, env);
     await editMessage(chatId, messageId,
@@ -330,6 +349,41 @@ async function handleSetResponse(chatId, text, env) {
   );
 }
 
+// Отправка сообщения конкретному пользователю
+async function handleSendMessageToUser(chatId, targetUserId, text, env) {
+  const users = await getUsers(env);
+  const user = users[targetUserId];
+  
+  if (!user) {
+    await sendMessage(chatId,
+      '❌ Пользователь не найден.',
+      getAdminKeyboard(),
+      env
+    );
+    return;
+  }
+
+  try {
+    await sendMessage(targetUserId,
+      `📩 Сообщение от администратора:\n\n${text}`,
+      null,
+      env
+    );
+    
+    await sendMessage(chatId,
+      `✅ Сообщение отправлено пользователю ${user.firstName} (@${user.username})`,
+      getAdminKeyboard(),
+      env
+    );
+  } catch (error) {
+    await sendMessage(chatId,
+      `❌ Не удалось отправить сообщение пользователю ${user.firstName} (@${user.username})`,
+      getAdminKeyboard(),
+      env
+    );
+  }
+}
+
 // Показать список пользователей
 async function showUsersList(chatId, messageId, env) {
   const users = await getUsers(env);
@@ -382,6 +436,9 @@ async function showUserManagement(chatId, messageId, targetUserId, env) {
       ],
       [
         { text: '🔄 Обнулить', callback_data: `sub_reset_${targetUserId}` }
+      ],
+      [
+        { text: '✉️ Отправить сообщение', callback_data: `send_msg_${targetUserId}` }
       ],
       [
         { text: '🔙 К списку', callback_data: 'back_users' }
