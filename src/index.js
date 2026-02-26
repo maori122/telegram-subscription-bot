@@ -84,10 +84,7 @@ async function handleMessage(message, env) {
   if (isAdmin) {
     const state = await getUserState(userId, env);
     
-    if (state === 'waiting_link') {
-      await clearUserState(userId, env);
-      await handleSendLink(chatId, message.text, env);
-    } else if (state === 'waiting_broadcast') {
+    if (state === 'waiting_broadcast') {
       await clearUserState(userId, env);
       await handleBroadcast(chatId, message.text, env);
     } else if (state === 'waiting_response') {
@@ -182,17 +179,6 @@ async function handleCallback(callbackQuery, env) {
   // Админ-панель
   if (data === 'admin_users') {
     await showUsersList(chatId, messageId, env);
-    await answerCallback(callbackQuery.id, '', env);
-    return;
-  }
-
-  if (data === 'admin_send_link') {
-    await setUserState(userId, 'waiting_link', env);
-    await editMessage(chatId, messageId,
-      '🔗 Отправьте ссылку, которую нужно разослать всем пользователям:',
-      getCancelKeyboard(),
-      env
-    );
     await answerCallback(callbackQuery.id, '', env);
     return;
   }
@@ -660,9 +646,6 @@ function getAdminKeyboard() {
     inline_keyboard: [
       [
         { text: '👥 Список пользователей', callback_data: 'admin_users' }
-      ],
-      [
-        { text: '🔗 Разослать ссылку', callback_data: 'admin_send_link' }
       ],
       [
         { text: '📢 Общая рассылка (новости)', callback_data: 'admin_broadcast' }
