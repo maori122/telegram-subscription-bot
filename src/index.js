@@ -120,7 +120,26 @@ async function handleMessage(message, env) {
 
   // Обработка фото (скриншот подписки)
   if (message.photo) {
-    await handleScreenshot(chatId, userId, message.photo, env);
+    // Проверяем, это ответ на сообщение с ссылкой?
+    if (!message.reply_to_message) {
+      await sendMessage(chatId, 
+        '❌ Отправьте скриншот ответом на сообщение с ссылкой от администратора.',
+        null,
+        env
+      );
+      return;
+    }
+    
+    // Проверяем, что это ответ на сообщение от бота
+    if (message.reply_to_message.from.is_bot) {
+      await handleScreenshot(chatId, userId, message.photo, message.reply_to_message.text, env);
+    } else {
+      await sendMessage(chatId, 
+        '❌ Отправьте скриншот ответом на сообщение с ссылкой от администратора.',
+        null,
+        env
+      );
+    }
     return;
   }
 
@@ -341,7 +360,7 @@ async function handleCallback(callbackQuery, env) {
 }
 
 // Обработка скриншота
-async function handleScreenshot(chatId, userId, photos, env) {
+async function handleScreenshot(chatId, userId, photos, originalMessage, env) {
   const users = await getUsers(env);
   const user = users[userId];
   
@@ -350,9 +369,33 @@ async function handleScreenshot(chatId, userId, photos, env) {
     return;
   }
 
+  // Проверяем время последнего скриншота (защита от спама)
+  const now = Date.now();
+  const lastScreenshot = user.lastScreenshot || 0;
+  const timeDiff = now - lastScreenshot;
+  
+  // Ограничение: не более 1 скриншота в 30 секунд
+  if (timeDiff < 30000) {
+    const waitSeconds = Math.ceil((30000 - timeDiff) / 1000);
+    await sendMessage(chatId, 
+      `⏳ Подождите ${waitSeconds} секунд перед отправкой следующего скриншота.`,
+      null, 
+      env
+    );
+    return;
+  }
+
+  // Обновляем время последнего скриншота
+  user.lastScreenshot = now;
+  users[userId] = user;
+  await saveUsers(users, env);
+
   // Получаем самое большое фото (лучшее качество)
   const photo = photos[photos.length - 1];
   const fileId = photo.file_id;
+
+  // Извлекаем ссылку из оригинального сообщения
+  const channelLink = originalMessage || 'Ссылка не найдена';
 
   // Отправляем пользователю подтверждение получения
   await sendMessage(chatId, 
@@ -368,7 +411,8 @@ async function handleScreenshot(chatId, userId, photos, env) {
       // Отправляем фото админу
       await sendPhoto(adminId, fileId, 
         `📸 Новый скриншот от ${user.firstName} (@${user.username})\n\n` +
-        `Текущее количество подписок: ${user.subscriptions || 0}\n\n` +
+        `📊 Текущее количество подписок: ${user.subscriptions || 0}\n` +
+        `🔗 Канал: ${channelLink}\n\n` +
         `Одобрить или отклонить?`,
         {
           inline_keyboard: [
