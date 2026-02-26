@@ -263,6 +263,14 @@ async function handleCallback(callbackQuery, env) {
     return;
   }
 
+  // Удаление пользователя
+  if (data.startsWith('delete_user_')) {
+    const targetUserId = data.substring(12);
+    await deleteUser(chatId, messageId, targetUserId, env);
+    await answerCallback(callbackQuery.id, '🗑️ Пользователь удален', env);
+    return;
+  }
+
   // Одобрение скриншота
   if (data.startsWith('approve_')) {
     const targetUserId = data.substring(8);
@@ -608,6 +616,9 @@ async function showUserManagement(chatId, messageId, targetUserId, env) {
         { text: '✉️ Отправить сообщение', callback_data: `send_msg_${targetUserId}` }
       ],
       [
+        { text: '🗑️ Удалить пользователя', callback_data: `delete_user_${targetUserId}` }
+      ],
+      [
         { text: '🔙 К списку', callback_data: 'back_users' }
       ]
     ]
@@ -644,6 +655,34 @@ async function resetSubscriptions(userId, env) {
     users[userId] = user;
     await saveUsers(users, env);
   }
+}
+
+// Удалить пользователя
+async function deleteUser(chatId, messageId, targetUserId, env) {
+  const users = await getUsers(env);
+  const user = users[targetUserId];
+  
+  if (!user) {
+    await editMessage(chatId, messageId,
+      '❌ Пользователь не найден.',
+      getAdminKeyboard(),
+      env
+    );
+    return;
+  }
+
+  const userName = `${user.firstName} (@${user.username})`;
+  
+  // Удаляем пользователя
+  delete users[targetUserId];
+  await saveUsers(users, env);
+
+  // Возвращаемся к списку пользователей
+  await editMessage(chatId, messageId,
+    `🗑️ Пользователь ${userName} удален из базы данных.`,
+    { inline_keyboard: [[{ text: '🔙 К списку', callback_data: 'back_users' }]] },
+    env
+  );
 }
 
 // Клавиатуры
