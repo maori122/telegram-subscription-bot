@@ -201,7 +201,7 @@ async function handleCallback(callbackQuery, env) {
 
   // Админ-панель
   if (data === 'admin_users') {
-    await showUsersList(chatId, messageId, env);
+    await showUsersList(chatId, messageId, 0, env);
     await answerCallback(callbackQuery.id, '', env);
     return;
   }
@@ -340,7 +340,15 @@ async function handleCallback(callbackQuery, env) {
   }
 
   if (data === 'back_users') {
-    await showUsersList(chatId, messageId, env);
+    await showUsersList(chatId, messageId, 0, env);
+    await answerCallback(callbackQuery.id, '', env);
+    return;
+  }
+
+  // Пагинация пользователей
+  if (data.startsWith('users_page_')) {
+    const page = parseInt(data.substring(11));
+    await showUsersList(chatId, messageId, page, env);
     await answerCallback(callbackQuery.id, '', env);
     return;
   }
@@ -368,27 +376,6 @@ async function handleScreenshot(chatId, userId, photos, originalMessage, env) {
     await sendMessage(chatId, 'Сначала зарегистрируйтесь через /start', null, env);
     return;
   }
-
-  // Проверяем время последнего скриншота (защита от спама)
-  const now = Date.now();
-  const lastScreenshot = user.lastScreenshot || 0;
-  const timeDiff = now - lastScreenshot;
-  
-  // Ограничение: не более 1 скриншота в 30 секунд
-  if (timeDiff < 30000) {
-    const waitSeconds = Math.ceil((30000 - timeDiff) / 1000);
-    await sendMessage(chatId, 
-      `⏳ Подождите ${waitSeconds} секунд перед отправкой следующего скриншота.`,
-      null, 
-      env
-    );
-    return;
-  }
-
-  // Обновляем время последнего скриншота
-  user.lastScreenshot = now;
-  users[userId] = user;
-  await saveUsers(users, env);
 
   // Получаем самое большое фото (лучшее качество)
   const photo = photos[photos.length - 1];
@@ -626,7 +613,7 @@ async function rejectScreenshot(chatId, messageId, targetUserId, env) {
 }
 
 // Показать список пользователей
-async function showUsersList(chatId, messageId, env) {
+async function showUsersList(chatId, messageId, page, env) {
   const users = await getUsers(env);
   const admins = await getAdmins(env);
   
@@ -642,17 +629,38 @@ async function showUsersList(chatId, messageId, env) {
     return;
   }
 
+  // Пагинация: 10 пользователей на страницу
+  const perPage = 10;
+  const totalPages = Math.ceil(userList.length / perPage);
+  const currentPage = Math.max(0, Math.min(page, totalPages - 1));
+  const start = currentPage * perPage;
+  const end = start + perPage;
+  const pageUsers = userList.slice(start, end);
+
   const buttons = [];
-  userList.forEach(([id, data]) => {
+  pageUsers.forEach(([id, data]) => {
     buttons.push([{
       text: `${data.firstName} (@${data.username}) - ${data.subscriptions || 0} подписок`,
       callback_data: `user_${id}`
     }]);
   });
-  buttons.push([{ text: '🔙 Назад', callback_data: 'back' }]);
+
+  // Кнопки навигации
+  const navButtons = [];
+  if (currentPage > 0) {
+    navButtons.push({ text: '⬅️ Назад', callback_data: `users_page_${currentPage - 1}` });
+  }
+  if (currentPage < totalPages - 1) {
+    navButtons.push({ text: 'Вперёд ➡️', callback_data: `users_page_${currentPage + 1}` });
+  }
+  if (navButtons.length > 0) {
+    buttons.push(navButtons);
+  }
+
+  buttons.push([{ text: '🔙 В меню', callback_data: 'back' }]);
 
   await editMessage(chatId, messageId,
-    '👥 Выберите пользователя для управления:',
+    `👥 Список пользователей (${start + 1}-${Math.min(end, userList.length)} из ${userList.length}):`,
     { inline_keyboard: buttons },
     env
   );
