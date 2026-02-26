@@ -1,0 +1,6 @@
+.env
+users.json
+admins.json
+__pycache__/
+*.pyc
+.DS_Store
