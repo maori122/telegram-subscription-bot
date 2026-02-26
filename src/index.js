@@ -240,6 +240,22 @@ async function handleCallback(callbackQuery, env) {
     return;
   }
 
+  // Одобрение скриншота
+  if (data.startsWith('approve_')) {
+    const targetUserId = data.substring(8);
+    await approveScreenshot(chatId, messageId, targetUserId, env);
+    await answerCallback(callbackQuery.id, '✅ Одобрено!', env);
+    return;
+  }
+
+  // Отклонение скриншота
+  if (data.startsWith('reject_')) {
+    const targetUserId = data.substring(7);
+    await rejectScreenshot(chatId, messageId, targetUserId, env);
+    await answerCallback(callbackQuery.id, '❌ Отклонено', env);
+    return;
+  }
+
   if (data === 'back') {
     await clearUserState(userId, env);
     await editMessage(chatId, messageId,
@@ -281,28 +297,39 @@ async function handleScreenshot(chatId, userId, photos, env) {
     return;
   }
 
-  // Увеличиваем счетчик подписок
-  user.subscriptions = (user.subscriptions || 0) + 1;
-  users[userId] = user;
-  await saveUsers(users, env);
+  // Получаем самое большое фото (лучшее качество)
+  const photo = photos[photos.length - 1];
+  const fileId = photo.file_id;
 
-  // Получаем текст ответа
-  const responseTemplate = await getResponseTemplate(env);
-  const responseText = responseTemplate.replace('{count}', user.subscriptions);
+  // Отправляем пользователю подтверждение получения
+  await sendMessage(chatId, 
+    '📸 Скриншот получен! Ожидайте проверки администратором...',
+    null, 
+    env
+  );
 
-  await sendMessage(chatId, responseText, null, env);
-
-  // Уведомляем админов
+  // Отправляем скриншот всем админам с кнопками модерации
   const admins = await getAdmins(env);
   for (const adminId of Object.keys(admins)) {
     try {
-      await sendMessage(adminId,
-        `📸 Новый скриншот от ${user.firstName} (@${user.username})\n` +
-        `Всего подписок: ${user.subscriptions}`,
-        null,
+      // Отправляем фото админу
+      await sendPhoto(adminId, fileId, 
+        `📸 Новый скриншот от ${user.firstName} (@${user.username})\n\n` +
+        `Текущее количество подписок: ${user.subscriptions || 0}\n\n` +
+        `Одобрить или отклонить?`,
+        {
+          inline_keyboard: [
+            [
+              { text: '✅ Одобрить (+1)', callback_data: `approve_${userId}` },
+              { text: '❌ Отклонить', callback_data: `reject_${userId}` }
+            ]
+          ]
+        },
         env
       );
-    } catch (e) {}
+    } catch (e) {
+      console.error('Error sending to admin:', e);
+    }
   }
 }
 
@@ -382,6 +409,86 @@ async function handleSendMessageToUser(chatId, targetUserId, text, env) {
       env
     );
   }
+}
+
+// Одобрение скриншота
+async function approveScreenshot(chatId, messageId, targetUserId, env) {
+  const users = await getUsers(env);
+  const user = users[targetUserId];
+  
+  if (!user) {
+    await editMessageCaption(chatId, messageId,
+      '❌ Пользователь не найден.',
+      null,
+      env
+    );
+    return;
+  }
+
+  // Увеличиваем счетчик подписок
+  user.subscriptions = (user.subscriptions || 0) + 1;
+  users[targetUserId] = user;
+  await saveUsers(users, env);
+
+  // Получаем текст ответа
+  const responseTemplate = await getResponseTemplate(env);
+  const responseText = responseTemplate.replace('{count}', user.subscriptions);
+
+  // Отправляем подтверждение пользователю
+  try {
+    await sendMessage(targetUserId, responseText, null, env);
+  } catch (e) {
+    console.error('Error sending to user:', e);
+  }
+
+  // Обновляем сообщение админа
+  await editMessageCaption(chatId, messageId,
+    `✅ ОДОБРЕНО\n\n` +
+    `Пользователь: ${user.firstName} (@${user.username})\n` +
+    `Новое количество подписок: ${user.subscriptions}`,
+    null,
+    env
+  );
+}
+
+// Отклонение скриншота
+async function rejectScreenshot(chatId, messageId, targetUserId, env) {
+  const users = await getUsers(env);
+  const user = users[targetUserId];
+  
+  if (!user) {
+    await editMessageCaption(chatId, messageId,
+      '❌ Пользователь не найден.',
+      null,
+      env
+    );
+    return;
+  }
+
+  // Отправляем уведомление пользователю
+  try {
+    await sendMessage(targetUserId,
+      '❌ Ваш скриншот был отклонен администратором.\n\n' +
+      'Пожалуйста, убедитесь что:\n' +
+      '• Вы действительно подписались\n' +
+      '• Скриншот четкий и читаемый\n' +
+      '• Видно подтверждение подписки\n\n' +
+      'Попробуйте отправить скриншот снова.',
+      null,
+      env
+    );
+  } catch (e) {
+    console.error('Error sending to user:', e);
+  }
+
+  // Обновляем сообщение админа
+  await editMessageCaption(chatId, messageId,
+    `❌ ОТКЛОНЕНО\n\n` +
+    `Пользователь: ${user.firstName} (@${user.username})\n` +
+    `Количество подписок: ${user.subscriptions || 0} (не изменилось)`,
+    null,
+    env
+  );
 }
 
 // Показать список пользователей
@@ -591,6 +698,36 @@ async function answerCallback(callbackQueryId, text, env) {
     callback_query_id: callbackQueryId,
     text: text
   }, env);
+}
+
+async function sendPhoto(chatId, photoId, caption, keyboard, env) {
+  const params = {
+    chat_id: chatId,
+    photo: photoId,
+    caption: caption,
+    parse_mode: 'HTML'
+  };
+  
+  if (keyboard) {
+    params.reply_markup = keyboard;
+  }
+
+  return await callTelegramAPI('sendPhoto', params, env);
+}
+
+async function editMessageCaption(chatId, messageId, caption, keyboard, env) {
+  const params = {
+    chat_id: chatId,
+    message_id: messageId,
+    caption: caption,
+    parse_mode: 'HTML'
+  };
+  
+  if (keyboard) {
+    params.reply_markup = keyboard;
+  }
+
+  return await callTelegramAPI('editMessageCaption', params, env);
 }
 
 async function callTelegramAPI(method, params, env) {
