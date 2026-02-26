@@ -5,3 +5,7 @@ node_modules/
 dist/
 *.log
 .DS_Store
+
+# Sensitive files
+YOUR_NEW_PASSWORD.txt
+.git-credentials
