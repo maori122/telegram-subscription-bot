@@ -390,7 +390,10 @@ async function handleSendLink(chatId, link, env) {
 // Общая рассылка (новости)
 async function handleBroadcast(chatId, text, env) {
   const users = await getUsers(env);
-  const userIds = Object.keys(users);
+  const admins = await getAdmins(env);
+  
+  // Фильтруем - рассылаем только обычным пользователям, не админам
+  const userIds = Object.keys(users).filter(id => !admins[id]);
   
   let success = 0;
   let failed = 0;
@@ -547,7 +550,10 @@ async function rejectScreenshot(chatId, messageId, targetUserId, env) {
 // Показать список пользователей
 async function showUsersList(chatId, messageId, env) {
   const users = await getUsers(env);
-  const userList = Object.entries(users);
+  const admins = await getAdmins(env);
+  
+  // Фильтруем пользователей - убираем админов из списка
+  const userList = Object.entries(users).filter(([id]) => !admins[id]);
   
   if (userList.length === 0) {
     await editMessage(chatId, messageId,
